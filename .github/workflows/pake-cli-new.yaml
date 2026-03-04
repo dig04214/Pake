@@ -1,0 +1,640 @@
+name: Build App With Pake CLI (Full Options)
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.26.2"
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform"
+        required: true
+        default: "macos-latest"
+        type: choice
+        options:
+          - "windows-latest"
+          - "macos-latest"
+          - "ubuntu-24.04"
+      url:
+        description: "Website URL or local HTML file path"
+        required: true
+      name:
+        description: "App name (lowercase for Linux)"
+        required: true
+      icon:
+        description: "Icon URL or path, auto-fetch if empty"
+        required: false
+      width:
+        description: "Window width in px (default: 1200)"
+        required: false
+        default: "1200"
+      height:
+        description: "Window height in px (default: 780)"
+        required: false
+        default: "780"
+      min_width:
+        description: "Minimum window width in px"
+        required: false
+      min_height:
+        description: "Minimum window height in px"
+        required: false
+      zoom:
+        description: "Initial page zoom level 50-200 (default: 100)"
+        required: false
+        default: "100"
+      fullscreen:
+        description: "Start in fullscreen mode"
+        required: false
+        type: boolean
+        default: false
+      maximize:
+        description: "Start with maximized window"
+        required: false
+        type: boolean
+        default: false
+      hide_title_bar:
+        description: "Hide title bar / immersive header (macOS only)"
+        required: false
+        type: boolean
+        default: false
+      activation_shortcut:
+        description: "Activation shortcut e.g. CmdOrControl+Shift+P"
+        required: false
+      always_on_top:
+        description: "Keep window always on top"
+        required: false
+        type: boolean
+        default: false
+      app_version:
+        description: "App version (default: 1.0.0)"
+        required: false
+        default: "1.0.0"
+      dark_mode:
+        description: "Force dark mode (macOS only)"
+        required: false
+        type: boolean
+        default: false
+      disabled_web_shortcuts:
+        description: "Disable default web shortcuts"
+        required: false
+        type: boolean
+        default: false
+      force_internal_navigation:
+        description: "Force all links to open inside the app"
+        required: false
+        type: boolean
+        default: false
+      internal_url_regex:
+        description: "Regex pattern for internal URLs e.g. ^https://example\\.com"
+        required: false
+      multi_arch:
+        description: "Universal binary for Intel + Apple Silicon (macOS only)"
+        required: false
+        type: boolean
+        default: false
+      targets:
+        description: "Package format: deb/appimage/rpm/x64/arm64/intel/apple/universal (platform-dependent)"
+        required: false
+      user_agent:
+        description: "Custom browser user agent"
+        required: false
+      show_system_tray:
+        description: "Show system tray icon"
+        required: false
+        type: boolean
+        default: false
+      system_tray_icon:
+        description: "System tray icon path or URL (.ico/.png, 32x32 to 256x256)"
+        required: false
+      hide_on_close:
+        description: "Hide window on close (default: macOS=true, Win/Linux=false)"
+        required: false
+        type: choice
+        default: "default"
+        options:
+          - "default"
+          - "true"
+          - "false"
+      start_to_tray:
+        description: "Start minimized to tray (requires show_system_tray)"
+        required: false
+        type: boolean
+        default: false
+      title:
+        description: "Window title bar text"
+        required: false
+      incognito:
+        description: "Launch in incognito / private browsing mode"
+        required: false
+        type: boolean
+        default: false
+      wasm:
+        description: "Enable WebAssembly support (COOP/COEP headers, for Flutter/WASM apps)"
+        required: false
+        type: boolean
+        default: false
+      enable_drag_drop:
+        description: "Enable native drag and drop"
+        required: false
+        type: boolean
+        default: false
+      keep_binary:
+        description: "Keep raw binary alongside installer"
+        required: false
+        type: boolean
+        default: false
+      iterative_build:
+        description: "Rapid build mode – app bundle only, no installer (good for debugging)"
+        required: false
+        type: boolean
+        default: false
+      multi_instance:
+        description: "Allow multiple app instances simultaneously"
+        required: false
+        type: boolean
+        default: false
+      multi_window:
+        description: "Allow multiple windows within one app instance"
+        required: false
+        type: boolean
+        default: false
+      installer_language:
+        description: "Windows installer language (default: en-US)"
+        required: false
+        default: "en-US"
+      use_local_file:
+        description: "Copy entire folder when URL is a local HTML file"
+        required: false
+        type: boolean
+        default: false
+      inject:
+        description: "CSS/JS files to inject, comma-separated e.g. ./style.css,./hotkey.js"
+        required: false
+      proxy_url:
+        description: "Proxy server URL e.g. http://127.0.0.1:7890"
+        required: false
+      debug:
+        description: "Enable developer tools and detailed logging"
+        required: false
+        type: boolean
+        default: false
+      ignore_certificate_errors:
+        description: "Ignore TLS certificate validation errors"
+        required: false
+        type: boolean
+        default: false
+      new_window:
+        description: "Allow new window for third-party login authorization"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: ${{ inputs.platform }}
+    runs-on: ${{ inputs.platform }}
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-env
+        with:
+          mode: build
+
+      - name: Build CLI
+        run: pnpm run cli:build
+
+      - name: Setup mold linker
+        if: runner.os == 'Linux'
+        uses: rui314/setup-mold@v1
+
+      - name: Rust cache restore
+        uses: actions/cache/restore@v4.2.0
+        id: cache_store
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-pake-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build App (Linux/macOS)
+        if: runner.os != 'Windows'
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          ARGS=("${{ inputs.url }}" "--name" "${{ inputs.name }}")
+
+          if [ -n "${{ inputs.icon }}" ]; then
+            ARGS+=("--icon" "${{ inputs.icon }}")
+          fi
+
+          if [ -n "${{ inputs.width }}" ]; then
+            ARGS+=("--width" "${{ inputs.width }}")
+          fi
+
+          if [ -n "${{ inputs.height }}" ]; then
+            ARGS+=("--height" "${{ inputs.height }}")
+          fi
+
+          if [ -n "${{ inputs.min_width }}" ]; then
+            ARGS+=("--min-width" "${{ inputs.min_width }}")
+          fi
+
+          if [ -n "${{ inputs.min_height }}" ]; then
+            ARGS+=("--min-height" "${{ inputs.min_height }}")
+          fi
+
+          if [ -n "${{ inputs.zoom }}" ]; then
+            ARGS+=("--zoom" "${{ inputs.zoom }}")
+          fi
+
+          if [ "${{ inputs.fullscreen }}" == "true" ]; then
+            ARGS+=("--fullscreen")
+          fi
+
+          if [ "${{ inputs.maximize }}" == "true" ]; then
+            ARGS+=("--maximize")
+          fi
+
+          if [ "${{ inputs.hide_title_bar }}" == "true" ]; then
+            ARGS+=("--hide-title-bar")
+          fi
+
+          if [ -n "${{ inputs.activation_shortcut }}" ]; then
+            ARGS+=("--activation-shortcut" "${{ inputs.activation_shortcut }}")
+          fi
+
+          if [ "${{ inputs.always_on_top }}" == "true" ]; then
+            ARGS+=("--always-on-top")
+          fi
+
+          if [ -n "${{ inputs.app_version }}" ]; then
+            ARGS+=("--app-version" "${{ inputs.app_version }}")
+          fi
+
+          if [ "${{ inputs.dark_mode }}" == "true" ]; then
+            ARGS+=("--dark-mode")
+          fi
+
+          if [ "${{ inputs.disabled_web_shortcuts }}" == "true" ]; then
+            ARGS+=("--disabled-web-shortcuts")
+          fi
+
+          if [ "${{ inputs.force_internal_navigation }}" == "true" ]; then
+            ARGS+=("--force-internal-navigation")
+          fi
+
+          if [ -n "${{ inputs.internal_url_regex }}" ]; then
+            ARGS+=("--internal-url-regex" "${{ inputs.internal_url_regex }}")
+          fi
+
+          if [ "${{ inputs.multi_arch }}" == "true" ]; then
+            ARGS+=("--multi-arch")
+          fi
+
+          if [ -n "${{ inputs.targets }}" ]; then
+            ARGS+=("--targets" "${{ inputs.targets }}")
+          fi
+
+          if [ -n "${{ inputs.user_agent }}" ]; then
+            ARGS+=("--user-agent" "${{ inputs.user_agent }}")
+          fi
+
+          if [ "${{ inputs.show_system_tray }}" == "true" ]; then
+            ARGS+=("--show-system-tray")
+          fi
+
+          if [ -n "${{ inputs.system_tray_icon }}" ]; then
+            ARGS+=("--system-tray-icon" "${{ inputs.system_tray_icon }}")
+          fi
+
+          if [ "${{ inputs.hide_on_close }}" == "true" ]; then
+            ARGS+=("--hide-on-close" "true")
+          elif [ "${{ inputs.hide_on_close }}" == "false" ]; then
+            ARGS+=("--hide-on-close" "false")
+          fi
+
+          if [ "${{ inputs.start_to_tray }}" == "true" ]; then
+            ARGS+=("--start-to-tray")
+          fi
+
+          if [ -n "${{ inputs.title }}" ]; then
+            ARGS+=("--title" "${{ inputs.title }}")
+          fi
+
+          if [ "${{ inputs.incognito }}" == "true" ]; then
+            ARGS+=("--incognito")
+          fi
+
+          if [ "${{ inputs.wasm }}" == "true" ]; then
+            ARGS+=("--wasm")
+          fi
+
+          if [ "${{ inputs.enable_drag_drop }}" == "true" ]; then
+            ARGS+=("--enable-drag-drop")
+          fi
+
+          if [ "${{ inputs.keep_binary }}" == "true" ]; then
+            ARGS+=("--keep-binary")
+          fi
+
+          if [ "${{ inputs.iterative_build }}" == "true" ]; then
+            ARGS+=("--iterative-build")
+          fi
+
+          if [ "${{ inputs.multi_instance }}" == "true" ]; then
+            ARGS+=("--multi-instance")
+          fi
+
+          if [ "${{ inputs.multi_window }}" == "true" ]; then
+            ARGS+=("--multi-window")
+          fi
+
+          if [ -n "${{ inputs.inject }}" ]; then
+            ARGS+=("--inject" "${{ inputs.inject }}")
+          fi
+
+          if [ -n "${{ inputs.proxy_url }}" ]; then
+            ARGS+=("--proxy-url" "${{ inputs.proxy_url }}")
+          fi
+
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            ARGS+=("--debug")
+          fi
+
+          if [ "${{ inputs.ignore_certificate_errors }}" == "true" ]; then
+            ARGS+=("--ignore-certificate-errors")
+          fi
+
+          if [ "${{ inputs.new_window }}" == "true" ]; then
+            ARGS+=("--new-window")
+          fi
+
+          if [ "${{ inputs.use_local_file }}" == "true" ]; then
+            ARGS+=("--use-local-file")
+          fi
+
+          echo "Running: node dist/cli.js ${ARGS[@]}"
+          node dist/cli.js "${ARGS[@]}"
+
+      - name: Build App (Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 25
+        shell: pwsh
+        run: |
+          $args = "${{ inputs.url }}", "--name", "${{ inputs.name }}"
+
+          if ("${{ inputs.icon }}" -ne "") {
+            $args += "--icon", "${{ inputs.icon }}"
+          }
+
+          if ("${{ inputs.width }}" -ne "") {
+            $args += "--width", "${{ inputs.width }}"
+          }
+
+          if ("${{ inputs.height }}" -ne "") {
+            $args += "--height", "${{ inputs.height }}"
+          }
+
+          if ("${{ inputs.min_width }}" -ne "") {
+            $args += "--min-width", "${{ inputs.min_width }}"
+          }
+
+          if ("${{ inputs.min_height }}" -ne "") {
+            $args += "--min-height", "${{ inputs.min_height }}"
+          }
+
+          if ("${{ inputs.zoom }}" -ne "") {
+            $args += "--zoom", "${{ inputs.zoom }}"
+          }
+
+          if ("${{ inputs.fullscreen }}" -eq "true") {
+            $args += "--fullscreen"
+          }
+
+          if ("${{ inputs.maximize }}" -eq "true") {
+            $args += "--maximize"
+          }
+
+          if ("${{ inputs.hide_title_bar }}" -eq "true") {
+            $args += "--hide-title-bar"
+          }
+
+          if ("${{ inputs.activation_shortcut }}" -ne "") {
+            $args += "--activation-shortcut", "${{ inputs.activation_shortcut }}"
+          }
+
+          if ("${{ inputs.always_on_top }}" -eq "true") {
+            $args += "--always-on-top"
+          }
+
+          if ("${{ inputs.app_version }}" -ne "") {
+            $args += "--app-version", "${{ inputs.app_version }}"
+          }
+
+          if ("${{ inputs.dark_mode }}" -eq "true") {
+            $args += "--dark-mode"
+          }
+
+          if ("${{ inputs.disabled_web_shortcuts }}" -eq "true") {
+            $args += "--disabled-web-shortcuts"
+          }
+
+          if ("${{ inputs.force_internal_navigation }}" -eq "true") {
+            $args += "--force-internal-navigation"
+          }
+
+          if ("${{ inputs.internal_url_regex }}" -ne "") {
+            $args += "--internal-url-regex", "${{ inputs.internal_url_regex }}"
+          }
+
+          if ("${{ inputs.targets }}" -ne "") {
+            $args += "--targets", "${{ inputs.targets }}"
+          }
+
+          if ("${{ inputs.user_agent }}" -ne "") {
+            $args += "--user-agent", "${{ inputs.user_agent }}"
+          }
+
+          if ("${{ inputs.show_system_tray }}" -eq "true") {
+            $args += "--show-system-tray"
+          }
+
+          if ("${{ inputs.system_tray_icon }}" -ne "") {
+            $args += "--system-tray-icon", "${{ inputs.system_tray_icon }}"
+          }
+
+          if ("${{ inputs.hide_on_close }}" -eq "true") {
+            $args += "--hide-on-close", "true"
+          } elseif ("${{ inputs.hide_on_close }}" -eq "false") {
+            $args += "--hide-on-close", "false"
+          }
+
+          if ("${{ inputs.start_to_tray }}" -eq "true") {
+            $args += "--start-to-tray"
+          }
+
+          if ("${{ inputs.title }}" -ne "") {
+            $args += "--title", "${{ inputs.title }}"
+          }
+
+          if ("${{ inputs.incognito }}" -eq "true") {
+            $args += "--incognito"
+          }
+
+          if ("${{ inputs.wasm }}" -eq "true") {
+            $args += "--wasm"
+          }
+
+          if ("${{ inputs.enable_drag_drop }}" -eq "true") {
+            $args += "--enable-drag-drop"
+          }
+
+          if ("${{ inputs.keep_binary }}" -eq "true") {
+            $args += "--keep-binary"
+          }
+
+          if ("${{ inputs.iterative_build }}" -eq "true") {
+            $args += "--iterative-build"
+          }
+
+          if ("${{ inputs.multi_instance }}" -eq "true") {
+            $args += "--multi-instance"
+          }
+
+          if ("${{ inputs.multi_window }}" -eq "true") {
+            $args += "--multi-window"
+          }
+
+          if ("${{ inputs.installer_language }}" -ne "") {
+            $args += "--installer-language", "${{ inputs.installer_language }}"
+          }
+
+          if ("${{ inputs.inject }}" -ne "") {
+            $args += "--inject", "${{ inputs.inject }}"
+          }
+
+          if ("${{ inputs.proxy_url }}" -ne "") {
+            $args += "--proxy-url", "${{ inputs.proxy_url }}"
+          }
+
+          if ("${{ inputs.debug }}" -eq "true") {
+            $args += "--debug"
+          }
+
+          if ("${{ inputs.ignore_certificate_errors }}" -eq "true") {
+            $args += "--ignore-certificate-errors"
+          }
+
+          if ("${{ inputs.new_window }}" -eq "true") {
+            $args += "--new-window"
+          }
+
+          if ("${{ inputs.use_local_file }}" -eq "true") {
+            $args += "--use-local-file"
+          }
+
+          Write-Host "Running: node dist/cli.js $($args -join ' ')"
+          node dist/cli.js $args
+
+          git checkout -- src-tauri/Cargo.lock
+
+      - name: Upload DMG (macOS)
+        if: runner.os == 'macOS' && inputs.iterative_build == false
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-macOS
+          path: ${{ inputs.name }}.dmg
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload APP (macOS iterative build)
+        if: runner.os == 'macOS' && inputs.iterative_build == true
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-macOS-app
+          path: ${{ inputs.name }}.app
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload DEB (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-Linux-deb
+          path: ${{ inputs.name }}.deb
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload AppImage (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-Linux-AppImage
+          path: ${{ inputs.name }}.AppImage
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload RPM (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-Linux-rpm
+          path: ${{ inputs.name }}.rpm
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload MSI (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-Windows
+          path: ${{ inputs.name }}.msi
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload Binary (Linux/macOS)
+        if: runner.os != 'Windows' && inputs.keep_binary == true
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-binary-unix
+          path: ${{ inputs.name }}-binary
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload Binary (Windows)
+        if: runner.os == 'Windows' && inputs.keep_binary == true
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-binary-windows
+          path: ${{ inputs.name }}.exe
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Rust cache store
+        uses: actions/cache/save@v4.2.0
+        if: steps.cache_store.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-pake-${{ hashFiles('**/Cargo.lock') }}
